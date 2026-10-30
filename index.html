@@ -1571,7 +1571,30 @@
                 right: 16px
             }
         }
-    </style>
+
+        #admin-launch{position:fixed;left:16px;bottom:16px;z-index:99999;border:1px solid var(--line);background:var(--paper);color:var(--mut);border-radius:99px;padding:8px 13px;font:600 12px var(--b);opacity:.45;cursor:pointer;pointer-events:auto}#admin-launch:hover{opacity:1;color:var(--ink)}
+        #admin-launch:hover{opacity:1;color:var(--ink)}
+        #admin-layer{position:fixed;inset:0;z-index:100;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(8,7,24,.78);backdrop-filter:blur(10px)}
+        #admin-layer.open{display:flex}
+        .admin-box{width:min(680px,100%);max-height:90dvh;overflow:auto;background:var(--paper);color:var(--ink);border:2px solid var(--ink);border-radius:24px;padding:clamp(20px,4vw,34px);box-shadow:10px 10px 0 var(--blue)}
+        .admin-top{display:flex;justify-content:space-between;gap:16px;align-items:center;margin-bottom:22px}
+        .admin-top h2{font-size:clamp(24px,4vw,36px)}
+        .admin-x{border:0;border-radius:50%;width:40px;height:40px;background:var(--lime);color:#16123d;font-size:24px;cursor:pointer}
+        .admin-box label{margin-top:14px}
+        .admin-box input,.admin-box select{width:100%;padding:12px 14px;border:1.5px solid var(--line);border-radius:12px;background:var(--bg);color:var(--ink);font:inherit}
+        .admin-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:20px}
+        .admin-actions button{border:0;border-radius:99px;padding:12px 18px;background:var(--blue);color:white;font:600 15px var(--b);cursor:pointer}
+        .admin-actions .secondary{background:var(--ink)}
+        #admin-status,#admin-status-editor{font-size:14px;color:var(--mut);margin-top:12px;overflow-wrap:anywhere}
+        #admin-editor{display:none}
+        #admin-editor.visible{display:block}
+        .admin-project{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
+        .admin-project button{border:0;border-radius:99px;padding:7px 12px;background:#b42318;color:white;cursor:pointer}
+\n    </style>
+
+<style id="image-save-protection">
+img { -webkit-user-drag: none; user-select: none; -webkit-user-select: none; }
+</style>
 </head>
 
 <body>
@@ -2024,6 +2047,145 @@
             })();
         }
     </script>
+    <button id="admin-launch" type="button" aria-label="Admin paneliga kirish">Admin</button>
+    <div id="admin-layer" aria-modal="true" role="dialog" aria-label="Admin paneli">
+        <div class="admin-box">
+            <div class="admin-top"><h2 id="admin-heading">Admin panel</h2><button class="admin-x" id="admin-close" type="button" aria-label="Yopish">×</button></div>
+            <form id="admin-login">
+                <label for="admin-name">Admin ismi</label><input id="admin-name" autocomplete="username" value="Javohir" placeholder="Javohir">
+                <label for="admin-code">Kirish kodi</label><input id="admin-code" type="password" autocomplete="current-password" required>
+                <div class="admin-actions"><button id="admin-login-button" type="button">Kirish</button></div><p id="admin-status" aria-live="polite"></p>
+            </form>
+            <div id="admin-editor">
+                <p style="color:var(--mut)">Loyiha ma’lumotlarini kiriting. Rasm va havola orqali loyiha mavjud loyihalar uslubida qo‘shiladi.</p>
+                <form id="admin-project-form">
+                    <label for="project-title">Loyiha nomi</label><input id="project-title" required maxlength="90" placeholder="Masalan: Yangi loyiha">
+                    <label for="project-link">Loyiha havolasi</label><input id="project-link" type="url" required placeholder="https://...">
+                    <label for="project-image">Rasm havolasi</label><input id="project-image" type="url" required placeholder="https://.../rasm.jpg">
+                    <label for="project-description">Qisqa tavsif</label><input id="project-description" maxlength="180" placeholder="Loyiha haqida qisqacha">
+                    <label for="project-type">Loyiha turi</label><select id="project-type"><option value="web">Web sayt</option><option value="ai">AI video</option></select>
+                    <div class="admin-actions"><button type="submit">Loyihani qo‘shish</button><button class="secondary" id="admin-logout" type="button">Chiqish</button></div>
+                </form>
+                <h3 style="margin-top:28px">Saytdagi loyihalarni boshqarish</h3><p style="color:var(--mut);margin-top:8px">Bu yerda yangi qo‘shilgan va avvaldan saytda turgan loyihalarni o‘chirishingiz mumkin.</p><div id="admin-project-list"></div><p id="admin-status-editor" aria-live="polite"></p>
+            </div>
+        </div>
+    </div>
+<script>
+(function(){
+ const layer=document.getElementById("admin-layer"),login=document.getElementById("admin-login"),editor=document.getElementById("admin-editor"),status=document.getElementById("admin-status"),statusEditor=document.getElementById("admin-status-editor"),heading=document.getElementById("admin-heading"),grid=document.getElementById("grid");
+ let unlocked=false;
+ const key="javohir_portfolio_projects_v1";
+ const hiddenKey="javohir_portfolio_hidden_original_projects_v1";
+ function hiddenOriginals(){try{return JSON.parse(localStorage.getItem(hiddenKey)||"[]")}catch(e){return []}}
+ function originalCards(){return Array.from(grid.querySelectorAll(".pj:not([data-admin-id])"))}
+ function applyHiddenOriginals(){const hidden=hiddenOriginals();originalCards().forEach((el,i)=>{el.dataset.originalAdminIndex=String(i);el.style.display=hidden.includes(i)?"none":""})}
+ const safeUrl=value=>{try{const u=new URL(value);return ["http:","https:"].includes(u.protocol)?u.href:""}catch(e){return ""}};
+ function load(){try{const a=JSON.parse(localStorage.getItem(key)||"[]");return Array.isArray(a)?a.filter(p=>p&&p.id&&safeUrl(p.link)&&safeUrl(p.image)):[]}catch(e){return []}}
+ function save(a){try{localStorage.setItem(key,JSON.stringify(a));return true}catch(e){statusEditor.textContent="Brauzer xotirasiga saqlab bo‘lmadi.";return false}}
+ function show(){layer.classList.add("open");if(unlocked){login.style.display="none";editor.classList.add("visible");heading.textContent="Javohir — Admin panel";renderList()}else{login.style.display="block";editor.classList.remove("visible");heading.textContent="Admin panel";status.textContent=""}}
+ function hide(){layer.classList.remove("open")}
+ function card(p){
+  const a=document.createElement("article");a.className="pj in";a.dataset.t=p.type;a.dataset.adminId=p.id;
+  const link=document.createElement("a");link.className="frame";link.href=p.link;link.target="_blank";link.rel="noopener";link.setAttribute("aria-label",p.title+" loyihasini ochish");
+  const chrome=document.createElement("div");chrome.className="chrome";for(let i=0;i<3;i++){const dot=document.createElement("i");chrome.appendChild(dot)}
+  const host=document.createElement("span");try{host.textContent=new URL(p.link).hostname+new URL(p.link).pathname}catch(e){host.textContent=p.link}
+  const badge=document.createElement("em");badge.textContent=p.type==="ai"?"AI VIDEO":"LIVE";chrome.append(host,badge);
+  const shot=document.createElement("div");shot.className="shot";const img=document.createElement("img");img.className="ss";img.src=p.image;img.alt=p.title;img.loading="lazy";
+  img.onerror=()=>{img.style.display="none";shot.style.background="linear-gradient(135deg,#3a35ff,#16123d)";const fallback=document.createElement("div");fallback.style.cssText="position:absolute;inset:0;display:grid;place-items:center;padding:20px;text-align:center;color:white;font-weight:800;font-size:clamp(20px,4vw,36px)";fallback.textContent=p.title;shot.appendChild(fallback)};
+  shot.appendChild(img);link.append(chrome,shot);
+  const cap=document.createElement("div");cap.className="cap";const h=document.createElement("h3");h.textContent=p.title;const go=document.createElement("a");go.className="go";go.href=p.link;go.target="_blank";go.rel="noopener";go.textContent="Loyihani ko‘rish ↗";go.addEventListener("click",e=>e.stopPropagation());cap.append(h,go);
+  if(p.description){const d=document.createElement("small");d.textContent=p.description;cap.appendChild(d)}a.append(link,cap);
+  link.addEventListener("click",e=>{if(e.ctrlKey||e.metaKey||e.shiftKey||e.button)return;e.preventDefault();if(typeof viewSite==="function")viewSite(p.link,p.title,link);else window.open(p.link,"_blank","noopener")});return a
+ }
+ function render(){grid.querySelectorAll("[data-admin-id]").forEach(x=>x.remove());load().forEach(p=>grid.appendChild(card(p)))}
+ function renderList(){
+  const list=document.getElementById("admin-project-list");list.replaceChildren();
+  load().forEach(p=>{const row=document.createElement("div");row.className="admin-project";const title=document.createElement("span");title.textContent="Yangi loyiha: "+p.title;const del=document.createElement("button");del.type="button";del.textContent="O‘chirish";del.onclick=()=>{if(save(load().filter(x=>x.id!==p.id))){render();renderList();statusEditor.textContent="Loyiha o‘chirildi."}};row.append(title,del);list.appendChild(row)});
+  originalCards().forEach((el,i)=>{const row=document.createElement("div");row.className="admin-project";const title=document.createElement("span");const h=el.querySelector("h3");title.textContent="Eski loyiha: "+(h?h.textContent.trim():"Loyiha "+(i+1));const del=document.createElement("button");del.type="button";const hidden=hiddenOriginals();del.textContent=hidden.includes(i)?"Qaytarish":"O‘chirish";del.style.background=hidden.includes(i)?"#16803c":"#b42318";del.onclick=()=>{const now=hiddenOriginals();const next=now.includes(i)?now.filter(n=>n!==i):[...now,i];try{localStorage.setItem(hiddenKey,JSON.stringify(next));applyHiddenOriginals();renderList();statusEditor.textContent=next.includes(i)?"Eski loyiha saytdan yashirildi.":"Loyiha qaytarildi."}catch(e){statusEditor.textContent="O‘zgarishni saqlab bo‘lmadi."}};row.append(title,del);list.appendChild(row)});
+  if(!list.children.length)list.textContent="Hozircha loyihalar yo‘q.";
+ }
+ document.getElementById("admin-launch").addEventListener("click",show);document.getElementById("admin-close").addEventListener("click",hide);layer.addEventListener("click",e=>{if(e.target===layer)hide()});document.addEventListener("keydown",e=>{if(e.key==="Escape")hide();if(e.ctrlKey&&e.altKey&&e.key.toLowerCase()==="a"){e.preventDefault();show()}});
+ function loginNow(){
+  const code=document.getElementById("admin-code").value.trim();
+  if(code==="718hob@#$"){
+   unlocked=true;document.getElementById("admin-name").value="Javohir";login.style.display="none";editor.classList.add("visible");heading.textContent="Javohir — Admin panel";status.textContent="";statusEditor.textContent="Xush kelibsiz, Javohir!";renderList();layer.classList.add("open");
+  }else{
+   status.textContent="Parol xato. Qaytadan urinib ko‘ring.";document.getElementById("admin-code").select();document.getElementById("admin-code").focus();
+  }
+ }
+ login.addEventListener("submit",e=>{e.preventDefault();e.stopPropagation();loginNow()});
+ document.getElementById("admin-login-button").addEventListener("click",loginNow);
+ document.getElementById("admin-code").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();loginNow()}});
+ document.getElementById("admin-logout").addEventListener("click",()=>{unlocked=false;show()});
+ const projectForm=document.getElementById("admin-project-form");
+ const titleInput=document.getElementById("project-title"),linkInput=document.getElementById("project-link"),imageInput=document.getElementById("project-image"),descriptionInput=document.getElementById("project-description"),typeInput=document.getElementById("project-type");
+ function addProject(e){
+  if(e){e.preventDefault();e.stopPropagation();}
+  if(!unlocked){status.textContent="Avval admin paneliga kiring.";return;}
+  if(!grid){statusEditor.textContent="Loyihalar joyi topilmadi (#grid).";return;}
+  statusEditor.textContent="";
+  const title=titleInput.value.trim(),rawLink=linkInput.value.trim(),rawImage=imageInput.value.trim(),description=descriptionInput.value.trim(),type=typeInput.value;
+  if(!title){statusEditor.textContent="Loyiha nomini kiriting.";titleInput.focus();return}
+  const link=safeUrl(rawLink),image=safeUrl(rawImage);
+  if(!link){statusEditor.textContent="Loyiha havolasini http:// yoki https:// bilan to‘g‘ri kiriting.";linkInput.focus();return}
+  if(!image){statusEditor.textContent="Rasm havolasini http:// yoki https:// bilan to‘g‘ri kiriting.";imageInput.focus();return}
+  const a=load();
+  a.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2,8),title,link,image,description,type});
+  if(!save(a))return;
+  try{render();renderList();projectForm.reset();statusEditor.textContent="✅ Loyiha muvaffaqiyatli qo‘shildi va portfolioda ko‘rsatildi.";}
+  catch(err){statusEditor.textContent="Loyiha saqlandi, ammo sahifaga chiqarishda xatolik yuz berdi. Sahifani yangilang.";console.error(err);}
+ }
+ projectForm.addEventListener("submit",function(e){addProject(e)});
+ const addButton=projectForm.querySelector('button[type="submit"]');
+ addButton.addEventListener("click",function(e){
+  e.preventDefault();
+  if(!projectForm.reportValidity()) return;
+  addProject(e);
+ });
+ projectForm.addEventListener("keydown",function(e){
+  if(e.key==="Enter" && e.target.tagName!=="TEXTAREA"){
+   e.preventDefault();
+   if(projectForm.reportValidity()) addProject(e);
+  }
+ });
+ render();applyHiddenOriginals();
+ // F12 va Inspect'ni to‘liq bloklash mumkin emas; bu faqat oddiy urinishlarni cheklaydi.
+ document.addEventListener("contextmenu",e=>{if(!e.target.closest("#admin-layer"))e.preventDefault()});document.addEventListener("keydown",e=>{if(e.key==="F12"||(e.ctrlKey&&e.shiftKey&&["I","J","C"].includes(e.key.toUpperCase()))||(e.ctrlKey&&e.key.toUpperCase()==="U"))e.preventDefault()});
+})();
+</script>
+
+
+<script id="image-save-protection-script">
+(function () {
+  function protectImage(img) {
+    if (!img) return;
+    img.draggable = false;
+    img.setAttribute('draggable', 'false');
+    img.style.webkitUserDrag = 'none';
+    img.style.userSelect = 'none';
+    img.style.webkitUserSelect = 'none';
+  }
+  document.querySelectorAll('img').forEach(protectImage);
+  document.addEventListener('contextmenu', function (event) {
+    if (event.target.closest('img')) event.preventDefault();
+  });
+  document.addEventListener('dragstart', function (event) {
+    if (event.target.closest('img')) event.preventDefault();
+  });
+  document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('img').forEach(protectImage);
+  });
+  new MutationObserver(function (mutations) {
+    mutations.forEach(function (mutation) {
+      mutation.addedNodes.forEach(function (node) {
+        if (node.nodeType !== 1) return;
+        if (node.matches && node.matches('img')) protectImage(node);
+        if (node.querySelectorAll) node.querySelectorAll('img').forEach(protectImage);
+      });
+    });
+  }).observe(document.documentElement, { childList: true, subtree: true });
+})();
+</script>
 </body>
 
 </html>
